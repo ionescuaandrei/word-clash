@@ -13,6 +13,7 @@ export default function RootLayout() {
     'Roboto-Regular': require('@/assets/fonts/Roboto-Regular.ttf'),
     'Roboto-Thin': require('@/assets/fonts/Roboto-Thin.ttf'),
     'Roboto-Italic': require('@/assets/fonts/Roboto-Italic.ttf'),
+    'Bungee-Spice': require('@/assets/fonts/BungeeSpice-Regular.ttf'),
 
   })
   return (
