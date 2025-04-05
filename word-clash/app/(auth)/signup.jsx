@@ -10,14 +10,16 @@ import {
 import React, { useState } from "react";
 import { COLORS } from "@/constants/theme";
 import { router } from "expo-router";
+import { useUserContext } from "@/context/UserContext";
 
 const signup = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const { setUserData } = useUserContext();
 
-  const handleLogin = async () => {
+  const handleSignup = async () => {
     try {
-      const response = await fetch("http://localhost:3000/signup", {
+      const response = await fetch("https://serverpid.onrender.com/register", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -27,10 +29,18 @@ const signup = () => {
 
       if (response.ok) {
         const data = await response.json();
-        Alert.alert("Success", "Logged in successfully!");
+
+        // Store user data in context
+        setUserData({
+          email: data.user.email,
+          userId: data.user.id, // Use the correct user ID from the response
+        });
+
+        Alert.alert("Success", "Account created successfully!");
         router.push("/(tabs)");
       } else {
-        Alert.alert("Error", "Invalid email or password.");
+        const errorData = await response.json();
+        Alert.alert("Error", errorData.message || "Failed to create account.");
       }
     } catch (error) {
       Alert.alert("Error", "Something went wrong. Please try again.");
@@ -51,11 +61,10 @@ const signup = () => {
             marginTop: 17,
           }}
         />
-
         <View style={styles.formContainer}>
           <View style={{ marginTop: 20 }}>
             <TextInput
-              placeholder="Email"
+              placeholder="Enter your email"
               placeholderTextColor={COLORS.grey}
               style={styles.input}
               selectTextOnFocus={true}
@@ -65,7 +74,7 @@ const signup = () => {
           </View>
           <View style={{ marginTop: 20 }}>
             <TextInput
-              placeholder="Password"
+              placeholder="Enter your password"
               placeholderTextColor={COLORS.grey}
               secureTextEntry={true}
               style={styles.input}
@@ -103,7 +112,7 @@ const signup = () => {
               </Text>
             </Text>
 
-            <TouchableOpacity style={styles.button} onPress={handleLogin}>
+            <TouchableOpacity style={styles.button} onPress={handleSignup}>
               <Text
                 style={{
                   color: COLORS.white,

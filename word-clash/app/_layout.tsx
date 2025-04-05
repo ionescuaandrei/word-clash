@@ -3,6 +3,7 @@ import { Stack } from 'expo-router';
 import { SafeAreaView } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useFonts } from 'expo-font';
+import { UserProvider } from '@/context/UserContext';
 
 export default function RootLayout() {
   useFonts({
@@ -14,13 +15,15 @@ export default function RootLayout() {
     'Roboto-Thin': require('@/assets/fonts/Roboto-Thin.ttf'),
     'Roboto-Italic': require('@/assets/fonts/Roboto-Italic.ttf'),
     'Bungee-Spice': require('@/assets/fonts/BungeeSpice-Regular.ttf'),
-
-  })
+  });
+  
   return (
-    <SafeAreaProvider>
-      <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.background }}>
-        <Stack screenOptions={{ headerShown: false }}/> 
-      </SafeAreaView>
-    </SafeAreaProvider>
+    <UserProvider>
+      <SafeAreaProvider>
+        <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.background }}>
+          <Stack screenOptions={{ headerShown: false }}/> 
+        </SafeAreaView>
+      </SafeAreaProvider>
+    </UserProvider>
   ); 
 }

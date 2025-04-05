@@ -12,9 +12,50 @@ import React, { useState, useEffect } from "react";
 import { COLORS } from "@/constants/theme";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
 import * as ImagePicker from 'expo-image-picker';
+import { useUserContext } from "@/context/UserContext";
 
 const profile = () => {
   const [profileImage, setProfileImage] = useState(null);
+  const [userData, setUserData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const { userData: contextUserData } = useUserContext();
+
+  // Fetch user data from the server
+  const fetchUserData = async () => {
+    try {
+      // Use the email/userId from context
+      if (!contextUserData || !contextUserData.email) {
+        console.error("No user data available in context");
+        setLoading(false);
+        return;
+      }
+
+      // Use either userId or email as identifier, depending on your API
+      const identifier = contextUserData.email;
+      
+      const response = await fetch(`https://serverpid.onrender.com/user/${identifier}`);
+      
+      if (response.ok) {
+        const data = await response.json();
+        setUserData(data);
+      } else {
+        console.error("Failed to fetch user data");
+        // In case of error, we'll display the email from context as fallback
+      }
+    } catch (error) {
+      console.error("Error fetching user data:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (contextUserData) {
+      fetchUserData();
+    } else {
+      setLoading(false);
+    }
+  }, [contextUserData]);
 
   const pickImage = async () => {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -60,25 +101,39 @@ const profile = () => {
                   )}
               </TouchableOpacity>
 
-              <Text style={styles.user}>Ionescu Andrei</Text>
+              {loading ? (
+                <Text style={styles.user}>Loading...</Text>
+              ) : (
+                <Text style={styles.user}>
+                  {userData?.username || contextUserData?.email || "no user"}
+                </Text>
+              )}
 
               <View style={styles.quickStats}>
                   <Text style={{ fontSize: 30, color: COLORS.white, marginBottom: 10 }}>Quick Stats:</Text>
                   <View style={styles.statRow}>
                       <Text style={styles.stats}>Total Wins/Loses:</Text>
-                      <Text style={styles.data}>100/30</Text>
+                      <Text style={styles.data}>
+                        30
+                        {/* {userData?.stats?.wins || "100"}/{userData?.stats?.losses || "30"} */}
+                      </Text>
                   </View>
                   <View style={styles.statRow}>
                       <Text style={styles.stats}>Win rate:</Text>
-                      <Text style={styles.data}>77%</Text>
+                      <Text style={styles.data}>
+                        {/* {userData?.stats?.winRate || "77"}% */}
+                        77%
+                      </Text>
                   </View>
-                  <View style={styles.statRow}>
+                  <View style={styles.statRow}></View>
                       <Text style={styles.stats}>Most Used Word Type:</Text>
-                      <Text style={styles.data}>Risky</Text>
+                      <Text style={styles.data}>
+                        {/* {userData?.stats?.mostUsedWordType || "Risky"} */}
+                        Risky
+                      </Text>
                   </View>
               </View>
           </View>
-      </View>
   );
 };
 

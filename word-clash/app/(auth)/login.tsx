@@ -10,14 +10,16 @@ import {
 import React, { useState } from "react";
 import { COLORS } from "@/constants/theme";
 import { router } from "expo-router";
+import { useUserContext } from "@/context/UserContext";
 
 const login = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const { setUserData } = useUserContext();
 
   const handleLogin = async () => {
     try {
-      const response = await fetch("http://localhost:3000/login", {
+      const response = await fetch("https://serverpid.onrender.com/login", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -27,11 +29,18 @@ const login = () => {
 
       if (response.ok) {
         const data = await response.json();
+
+        // Store user data in context
+        setUserData({
+          email: data.user.email,
+          userId: data.user.id, // Use the correct user ID from the response
+        });
+
         Alert.alert("Success", "Logged in successfully!");
         router.push("/(tabs)");
-        console.log("Succes");
       } else {
-        Alert.alert("Error", "Invalid email or password.");
+        const errorData = await response.json();
+        Alert.alert("Error", errorData.message || "Invalid email or password.");
       }
     } catch (error) {
       Alert.alert("Error", "Something went wrong. Please try again.");
@@ -56,7 +65,7 @@ const login = () => {
         <View style={styles.formContainer}>
           <View style={{ marginTop: 20 }}>
             <TextInput
-              placeholder="username"
+              placeholder="Enter your email"
               placeholderTextColor={COLORS.grey}
               style={styles.input}
               selectTextOnFocus={true}
@@ -66,7 +75,7 @@ const login = () => {
           </View>
           <View style={{ marginTop: 20 }}>
             <TextInput
-              placeholder="Password"
+              placeholder="Enter your password"
               placeholderTextColor={COLORS.grey}
               secureTextEntry={true}
               style={styles.input}
