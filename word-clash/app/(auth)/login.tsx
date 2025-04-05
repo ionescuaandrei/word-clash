@@ -5,12 +5,39 @@ import {
   Image,
   TextInput,
   TouchableOpacity,
+  Alert,
 } from "react-native";
-import React from "react";
+import React, { useState } from "react";
 import { COLORS } from "@/constants/theme";
 import { router } from "expo-router";
 
 const login = () => {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+
+  const handleLogin = async () => {
+    try {
+      const response = await fetch("http://localhost:3000/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email, password }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        Alert.alert("Success", "Logged in successfully!");
+        router.push("/(tabs)");
+        console.log("Succes");
+      } else {
+        Alert.alert("Error", "Invalid email or password.");
+      }
+    } catch (error) {
+      Alert.alert("Error", "Something went wrong. Please try again.");
+    }
+  };
+
   return (
     <View style={styles.container}>
       <View>
@@ -29,10 +56,12 @@ const login = () => {
         <View style={styles.formContainer}>
           <View style={{ marginTop: 20 }}>
             <TextInput
-              placeholder="Email"
+              placeholder="username"
               placeholderTextColor={COLORS.grey}
               style={styles.input}
               selectTextOnFocus={true}
+              value={email}
+              onChangeText={setEmail}
             />
           </View>
           <View style={{ marginTop: 20 }}>
@@ -41,6 +70,8 @@ const login = () => {
               placeholderTextColor={COLORS.grey}
               secureTextEntry={true}
               style={styles.input}
+              value={password}
+              onChangeText={setPassword}
             />
           </View>
           <View>
@@ -54,10 +85,10 @@ const login = () => {
                 textAlign: "center",
               }}
             >
-              Don't have an accout yet?
+              Don't have an account yet?
               <Text
                 onPress={() => {
-                    // router.push('/(tabs)')
+                  router.push("/signup");
                 }}
                 style={{
                   color: COLORS.white,
@@ -73,11 +104,7 @@ const login = () => {
               </Text>
             </Text>
 
-            <TouchableOpacity style={styles.button}
-            onPress={() => {
-              router.push("/(tabs)");
-            }}
-            >
+            <TouchableOpacity style={styles.button} onPress={handleLogin}>
               <Text
                 style={{
                   color: COLORS.white,
