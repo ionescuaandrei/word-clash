@@ -4,7 +4,6 @@ import { COLORS } from '@/constants/theme';
 import { useLocalSearchParams } from 'expo-router';
 
 const Battle = () => {
-  // Use useLocalSearchParams instead of useSearchParams
   const params = useLocalSearchParams();
   const gameSessionId = params.gameSessionId;
   const [gameSession, setGameSession] = useState(null);
