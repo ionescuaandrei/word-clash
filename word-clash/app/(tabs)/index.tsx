@@ -86,13 +86,17 @@ const index = () => {
         const data = await response.json();
         console.log("Game session response:", data);
         
-        if (data.gameSession && data.gameSession.id) {
-          // Fix the path to the battle component
+        if (data.gameSession && (data.gameSession.id || data.gameSession._id)) {
+          // Use either id or _id property depending on what's available
+          const sessionId = data.gameSession.id || data.gameSession._id;
+          console.log("Navigating to battle with session ID:", sessionId);
+          
           router.push({
             pathname: '../components/battle',
-            params: { gameSessionId: data.gameSession.id }
+            params: { gameSessionId: sessionId }
           });
         } else {
+          console.error("Invalid game session data structure:", data);
           Alert.alert('Error', 'Invalid game session data.');
         }
       } else {

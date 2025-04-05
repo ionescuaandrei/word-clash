@@ -33,7 +33,7 @@ const login = () => {
         // Store user data in context
         setUserData({
           email: data.user.email,
-          userId: data.user.id, // Use the correct user ID from the response
+          userId: data.user.id, 
         });
 
         Alert.alert("Success", "Logged in successfully!");
