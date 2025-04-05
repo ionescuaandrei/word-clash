@@ -1,12 +1,12 @@
 import { View, Text } from 'react-native'
 import React from 'react'
 
-const battle = () => {
+const profile = () => {
   return (
     <View>
-      <Text>battle</Text>
+      <Text>profile</Text>
     </View>
   )
 }
 
-export default battle
+export default profile

@@ -1,39 +1,25 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { useFonts } from 'expo-font';
+import { COLORS } from '@/constants/theme';
 import { Stack } from 'expo-router';
-import * as SplashScreen from 'expo-splash-screen';
-import { StatusBar } from 'expo-status-bar';
-import { useEffect } from 'react';
-import 'react-native-reanimated';
-
-import { useColorScheme } from '@/hooks/useColorScheme';
-
-// Prevent the splash screen from auto-hiding before asset loading is complete.
-SplashScreen.preventAutoHideAsync();
+import { SafeAreaView } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { useFonts } from 'expo-font';
 
 export default function RootLayout() {
-  const colorScheme = useColorScheme();
-  const [loaded] = useFonts({
-    SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
-  });
+  useFonts({
+    'Roboto-Black': require('@/assets/fonts/Roboto-Black.ttf'),
+    'Roboto-Bold': require('@/assets/fonts/Roboto-Bold.ttf'),
+    'Roboto-Light': require('@/assets/fonts/Roboto-Light.ttf'),
+    'Roboto-Medium': require('@/assets/fonts/Roboto-Medium.ttf'),
+    'Roboto-Regular': require('@/assets/fonts/Roboto-Regular.ttf'),
+    'Roboto-Thin': require('@/assets/fonts/Roboto-Thin.ttf'),
+    'Roboto-Italic': require('@/assets/fonts/Roboto-Italic.ttf'),
 
-  useEffect(() => {
-    if (loaded) {
-      SplashScreen.hideAsync();
-    }
-  }, [loaded]);
-
-  if (!loaded) {
-    return null;
-  }
-
+  })
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="+not-found" />
-      </Stack>
-      <StatusBar style="auto" />
-    </ThemeProvider>
-  );
+    <SafeAreaProvider>
+      <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.background }}>
+        <Stack screenOptions={{ headerShown: false }}/> 
+      </SafeAreaView>
+    </SafeAreaProvider>
+  ); 
 }

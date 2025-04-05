@@ -1,12 +1,12 @@
 import { View, Text } from 'react-native'
 import React from 'react'
 
-const battle = () => {
+const tournament = () => {
   return (
     <View>
-      <Text>battle</Text>
+      <Text>tournament</Text>
     </View>
   )
 }
 
-export default battle
+export default tournament
