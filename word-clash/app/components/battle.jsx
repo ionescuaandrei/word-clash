@@ -177,116 +177,22 @@ const Battle = () => {
     }
   }, [gameSession, currentRound, startWordInputTimer]);
 
-  // Start the timer for word submission
-  const startWordInputTimer = useCallback(() => {
-    setSubmittedWord(false);
-    setPlayerWord('');
-    let timer = 15; // 15 seconds to input a word
-    setWordInputTimer(timer);
+  // Define startCountdown at component level
+  const startCountdown = useCallback(() => {
+    let timer = 3; // Start countdown from 3
+    setCountdown(timer);
 
     const interval = setInterval(() => {
       timer -= 1;
-      setWordInputTimer(timer);
+      setCountdown(timer);
 
       if (timer <= 0) {
         clearInterval(interval);
-        
-        // Auto-submit if time runs out and word hasn't been submitted
-        if (!submittedWord && playerWord.trim().length > 0) {
-          handleWordSubmit();
-        } else if (!submittedWord) {
-          setPlayerWord('(no submission)');
-          handleWordSubmit();
-        }
+        setCountdown(null); // Clear countdown
+        fetchSystemWord(); // Fetch system word after countdown ends
       }
     }, 1000);
-
-    return () => clearInterval(interval);
-  }, [playerWord, submittedWord]);
-
-  // Submit the player's word
-  const handleWordSubmit = useCallback(async () => {
-    if (submittedWord) return;
-
-    if (!userData || !userData.userId) {
-      Alert.alert('Error', 'User not logged in.');
-      return;
-    }
-
-    if (!gameSession) {
-      Alert.alert('Error', 'Game session not found.');
-      return;
-    }
-
-    const wordToSubmit = playerWord.trim() || '(no submission)';
-    animateSwordClash(); // Animate swords when submitting
-
-    try {
-      setSubmittedWord(true);
-      const sessionId = gameSession._id || gameSession.id;
-
-      console.log(`Submitting word "${wordToSubmit}" for player ${userData.userId} in game ${sessionId}`);
-
-      const response = await fetch(`https://serverpid.onrender.com/evaluate-round/${sessionId}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          userId: userData.userId,
-          word: wordToSubmit,
-          systemword: systemWord,
-        }),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        console.log("Word submission response:", data);
-
-        // Process the round result
-        setRoundResult(data);
-
-        // Check if both players submitted their words
-        if (data.bothPlayersSubmitted) {
-          console.log("Both players have submitted their words");
-          
-          // Check if game completed
-          if (data.gameStatus === 'completed') {
-            console.log("Game completed. Final result:", data);
-            setGameSession(data.gameSession);
-          } else {
-            // If game continues, prepare for the next round
-            console.log("Proceeding to the next round:", data.currentRound);
-            
-            // Schedule next round after showing the result
-            setTimeout(() => {
-              setCurrentRound(data.currentRound);
-              setRoundResult(null);
-              setSubmittedWord(false);
-              fetchSystemWord();
-            }, 5000);
-          }
-        } else {
-          console.log("Waiting for opponent to submit their word");
-          // Start polling for round results
-          startPollingForRoundResult(sessionId);
-        }
-      } else {
-        let errorData;
-        try {
-          errorData = await response.json();
-        } catch (e) {
-          errorData = { message: 'Failed to submit word' };
-        }
-        Alert.alert('Error', errorData.message || 'Failed to submit word.');
-        setSubmittedWord(false);
-      }
-    } catch (error) {
-      console.error('Error submitting word:', error);
-      Alert.alert('Error', 'Something went wrong. Please try again.');
-      setSubmittedWord(false);
-    }
-  }, [playerWord, gameSession, userData, systemWord, submittedWord, animateSwordClash]);
+  }, [fetchSystemWord]);
 
   // Poll for round results after submitting
   const startPollingForRoundResult = useCallback((sessionId) => {
@@ -362,22 +268,149 @@ const Battle = () => {
     return () => clearInterval(poll);
   }, [userData?.userId, playerWord, systemWord, fetchSystemWord]);
 
-  // Define startCountdown at component level
-  const startCountdown = useCallback(() => {
-    let timer = 3; // Start countdown from 3
-    setCountdown(timer);
+  // Submit the player's word
+  const handleWordSubmit = useCallback(async () => {
+    if (submittedWord) return;
+
+    if (!userData || !userData.userId) {
+      Alert.alert('Error', 'User not logged in.');
+      return;
+    }
+
+    if (!gameSession) {
+      Alert.alert('Error', 'Game session not found.');
+      return;
+    }
+
+    const wordToSubmit = playerWord.trim() || '(no submission)';
+    
+    // Call animateSwordClash directly instead of using it as a dependency
+    // This avoids another circular dependency
+    Animated.parallel([
+      Animated.timing(leftSwordTranslateX, {
+        toValue: 0,
+        duration: 300,
+        easing: Easing.easeIn,
+        useNativeDriver: true,
+      }),
+      Animated.timing(rightSwordTranslateX, {
+        toValue: 0,
+        duration: 300,
+        easing: Easing.easeIn,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      setTimeout(() => {
+        Animated.parallel([
+          Animated.timing(leftSwordTranslateX, {
+            toValue: 65,
+            duration: 300,
+            easing: Easing.easeOut,
+            useNativeDriver: true,
+          }),
+          Animated.timing(rightSwordTranslateX, {
+            toValue: -65,
+            duration: 300,
+            easing: Easing.easeOut,
+            useNativeDriver: true,
+          }),
+        ]).start();
+      }, 500);
+    });
+
+    try {
+      setSubmittedWord(true);
+      const sessionId = gameSession._id || gameSession.id;
+
+      console.log(`Submitting word "${wordToSubmit}" for player ${userData.userId} in game ${sessionId}`);
+
+      const response = await fetch(`https://serverpid.onrender.com/evaluate-round/${sessionId}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userId: userData.userId,
+          word: wordToSubmit,
+          systemword: systemWord,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log("Word submission response:", data);
+
+        // Process the round result
+        setRoundResult(data);
+
+        // Check if both players submitted their words
+        if (data.bothPlayersSubmitted) {
+          console.log("Both players have submitted their words");
+          
+          // Check if game completed
+          if (data.gameStatus === 'completed') {
+            console.log("Game completed. Final result:", data);
+            setGameSession(data.gameSession);
+          } else {
+            // If game continues, prepare for the next round
+            console.log("Proceeding to the next round:", data.currentRound);
+            
+            // Schedule next round after showing the result
+            setTimeout(() => {
+              setCurrentRound(data.currentRound);
+              setRoundResult(null);
+              setSubmittedWord(false);
+              fetchSystemWord();
+            }, 5000);
+          }
+        } else {
+          console.log("Waiting for opponent to submit their word");
+          // Start polling for round results
+          startPollingForRoundResult(sessionId);
+        }
+      } else {
+        let errorData;
+        try {
+          errorData = await response.json();
+        } catch (e) {
+          errorData = { message: 'Failed to submit word' };
+        }
+        Alert.alert('Error', errorData.message || 'Failed to submit word.');
+        setSubmittedWord(false);
+      }
+    } catch (error) {
+      console.error('Error submitting word:', error);
+      Alert.alert('Error', 'Something went wrong. Please try again.');
+      setSubmittedWord(false);
+    }
+  }, [playerWord, gameSession, userData, systemWord, submittedWord, leftSwordTranslateX, rightSwordTranslateX]);
+
+  // Start the timer for word submission
+  const startWordInputTimer = useCallback(() => {
+    setSubmittedWord(false);
+    setPlayerWord('');
+    let timer = 15; // 15 seconds to input a word
+    setWordInputTimer(timer);
 
     const interval = setInterval(() => {
       timer -= 1;
-      setCountdown(timer);
+      setWordInputTimer(timer);
 
       if (timer <= 0) {
         clearInterval(interval);
-        setCountdown(null); // Clear countdown
-        fetchSystemWord(); // Fetch system word after countdown ends
+        
+        // Auto-submit if time runs out and word hasn't been submitted
+        if (!submittedWord && playerWord.trim().length > 0) {
+          handleWordSubmit();
+        } else if (!submittedWord) {
+          setPlayerWord('(no submission)');
+          handleWordSubmit();
+        }
       }
     }, 1000);
-  }, [fetchSystemWord]);
+
+    return () => clearInterval(interval);
+  }, [playerWord, submittedWord, handleWordSubmit]);
 
   // Initial game session fetch
   useEffect(() => {
@@ -611,41 +644,6 @@ const Battle = () => {
       </View>
     );
   };
-
-  const animateSwordClash = useCallback(() => {
-    // Animate swords to clash when word is submitted
-    Animated.parallel([
-      Animated.timing(leftSwordTranslateX, {
-        toValue: 0,
-        duration: 300,
-        easing: Easing.easeIn,
-        useNativeDriver: true,
-      }),
-      Animated.timing(rightSwordTranslateX, {
-        toValue: 0,
-        duration: 300,
-        easing: Easing.easeIn,
-        useNativeDriver: true,
-      }),
-    ]).start(() => {
-      setTimeout(() => {
-        Animated.parallel([
-          Animated.timing(leftSwordTranslateX, {
-            toValue: 65,
-            duration: 300,
-            easing: Easing.easeOut,
-            useNativeDriver: true,
-          }),
-          Animated.timing(rightSwordTranslateX, {
-            toValue: -65,
-            duration: 300,
-            easing: Easing.easeOut,
-            useNativeDriver: true,
-          }),
-        ]).start();
-      }, 500);
-    });
-  }, [leftSwordTranslateX, rightSwordTranslateX]);
 
   // Animation styles for swords
   const leftSwordStyle = {
