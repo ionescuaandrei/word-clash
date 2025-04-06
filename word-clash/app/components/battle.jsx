@@ -1,13 +1,14 @@
 import { StyleSheet, Text, View, Alert, TouchableOpacity, Animated, Easing, Dimensions, TextInput } from 'react-native';
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { COLORS } from '@/constants/theme';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useUserContext } from '@/context/UserContext';
 
 const { width } = Dimensions.get('window');
 
 const Battle = () => {
+  const router = useRouter(); // Add router for navigation
   const params = useLocalSearchParams();
   const gameSessionId = params.gameSessionId;
   const [gameSession, setGameSession] = useState(null);
@@ -20,7 +21,7 @@ const Battle = () => {
   const [submittedWord, setSubmittedWord] = useState(false);
   const [roundResult, setRoundResult] = useState(null);
   const [pollingActive, setPollingActive] = useState(true);
-  const [currentRound, setCurrentRound] = useState(1);
+  const [currentRound, setCurrentRound] = useState(1); // Always 1 since we only have one round
   const { userData } = useUserContext();
   
   // Animation values for the swords
@@ -143,17 +144,17 @@ const Battle = () => {
         const data = await response.json();
         console.log("Received system word data:", data);
 
-        // Extract the system word for the current round
-        const roundData = data.rounds.find(round => round.round === currentRound);
+        // Extract the system word for round 1 (since we only have one round now)
+        const roundData = data.rounds.find(round => round.round === 1);
         if (roundData && roundData.system_word) {
           setSystemWord(roundData.system_word);
-          console.log("System word for round", currentRound, ":", roundData.system_word);
+          console.log("System word for round 1:", roundData.system_word);
 
           // Start the word input timer once we have the system word
           startWordInputTimer();
         } else {
-          console.error("System word not found for round", currentRound);
-          setError('System word not found for the current round.');
+          console.error("System word not found for round 1");
+          setError('System word not found for the round.');
         }
       } else {
         const errorText = await response.text();
@@ -164,7 +165,7 @@ const Battle = () => {
       console.error('Error fetching system word:', error);
       setError('Something went wrong while fetching the system word.');
     }
-  }, [gameSession, currentRound]);
+  }, [gameSession]);
 
   // Start the timer for word submission
   const startWordInputTimer = useCallback(() => {
@@ -172,26 +173,23 @@ const Battle = () => {
     setPlayerWord('');
     let timer = 15; // 15 seconds to input a word
     setWordInputTimer(timer);
-
+  
     const interval = setInterval(() => {
       timer -= 1;
       setWordInputTimer(timer);
-
+  
       if (timer <= 0) {
         clearInterval(interval);
         
-        // Auto-submit if time runs out and word hasn't been submitted
-        if (!submittedWord && playerWord.trim().length > 0) {
-          handleWordSubmit();
-        } else if (!submittedWord) {
-          setPlayerWord('(no submission)');
+        // Auto-submit when time runs out, regardless of input
+        if (!submittedWord) {
           handleWordSubmit();
         }
       }
     }, 1000);
-
+  
     return () => clearInterval(interval);
-  }, [playerWord, submittedWord]);
+  }, [submittedWord]);
 
   // Submit the player's word
   const handleWordSubmit = useCallback(async () => {
@@ -207,7 +205,7 @@ const Battle = () => {
       return;
     }
 
-    const wordToSubmit = playerWord.trim() || '(no submission)';
+    const wordToSubmit = playerWord.trim() || 'gigel'; ;
 
     try {
       setSubmittedWord(true);
@@ -223,29 +221,29 @@ const Battle = () => {
         body: JSON.stringify({
           userId: userData.userId,
           word: wordToSubmit,
-          systemword: systemWord,
+          systemWord: systemWord,
         }),
       });
 
       if (response.ok) {
         const data = await response.json();
+        console.log('Submitting payload:', {
+          userId: userData.userId,
+          word: wordToSubmit,
+          systemword: systemWord,
+        });
         console.log("Word submission response:", data);
 
         setRoundResult(data);
 
         if (data.bothPlayersSubmitted) {
           console.log("Both players have submitted their words.");
-          if (data.gameStatus === 'completed') {
-            console.log("Game completed. Final result:", data);
-            setGameSession(data.gameSession); // Update the game session with final data
-          } else {
-            // Fetch the next system word for the new round
-            console.log("Proceeding to the next round...");
-            setTimeout(() => {
-              setRoundResult(null);
-              fetchSystemWord();
-            }, 5000);
-          }
+          // Since we only have one round, mark the game as completed once both players submit
+          setGameSession({
+            ...gameSession,
+            status: 'completed',
+            winner: determineWinner(data.scores)
+          });
         } else {
           console.log("Waiting for the opponent's response...");
           startPollingForRoundResult(sessionId);
@@ -262,6 +260,16 @@ const Battle = () => {
     }
   }, [playerWord, gameSession, userData, systemWord, submittedWord]);
 
+  // Helper function to determine the winner based on scores
+  const determineWinner = (scores) => {
+    if (scores.player1 > scores.player2) {
+      return gameSession.player1._id || gameSession.player1.id;
+    } else if (scores.player2 > scores.player1) {
+      return gameSession.player2._id || gameSession.player2.id;
+    }
+    return null; // Tie
+  };
+
   // Poll for round results after submitting
   const startPollingForRoundResult = useCallback((sessionId) => {
     let pollCount = 0;
@@ -276,7 +284,7 @@ const Battle = () => {
       }
       
       try {
-        const response = await fetch(`https://serverpid.onrender.com/round-status/${sessionId}`, {
+        const response = await fetch(`https://serverpid.onrender.com/gamesessions/${sessionId}`, {
           method: 'GET',
         });
         
@@ -288,16 +296,13 @@ const Battle = () => {
             clearInterval(poll);
             setRoundResult(data);
             
-            if (data.gameStatus === 'completed') {
-              console.log("Game completed. Final result:", data);
-              setGameSession(data.gameSession); // Update the game session with final data
-            } else {
-              console.log("Proceeding to the next round...");
-              setTimeout(() => {
-                setRoundResult(null);
-                fetchSystemWord();
-              }, 5000);
-            }
+            // Since we only have one round, mark the game as completed
+            const winner = determineWinner(data.scores);
+            setGameSession({
+              ...gameSession,
+              status: 'completed',
+              winner: winner
+            });
           }
         }
       } catch (error) {
@@ -306,7 +311,7 @@ const Battle = () => {
     }, 1000); // Poll every second
     
     return () => clearInterval(poll);
-  }, [fetchSystemWord]);
+  }, [gameSession]);
 
   // Define startCountdown at component level
   const startCountdown = useCallback(() => {
@@ -461,7 +466,7 @@ const Battle = () => {
     return (
       <View style={styles.wordInputContainer}>
         <Text style={styles.systemWord}>System Word: {systemWord}</Text>
-        <Text style={styles.roundInfo}>Round {currentRound} of 3</Text>
+        <Text style={styles.roundInfo}>Single Round Battle</Text>
         
         {wordInputTimer !== null && !submittedWord && (
           <Text style={styles.timer}>Time remaining: {wordInputTimer}s</Text>
@@ -497,7 +502,7 @@ const Battle = () => {
           <View style={styles.submittedContainer}>
             <Text style={styles.submittedText}>Word submitted: {playerWord}</Text>
             <Text style={styles.waitingText}>
-              {roundResult ? 'Round complete!' : 'Waiting for opponent...'}
+              {roundResult ? 'Game complete!' : 'Waiting for opponent...'}
             </Text>
           </View>
         )}
@@ -508,13 +513,21 @@ const Battle = () => {
   const renderRoundResult = () => {
     if (!roundResult) return null;
 
-    const { message, explanation, roundResult: result, scores, gameStatus, gameSession } = roundResult;
+    const { message, explanation, roundResult: result, scores } = roundResult;
+
+    // Determine winner based on scores
+    let winnerText = "It's a tie!";
+    if (scores.player1 > scores.player2) {
+      winnerText = userData.userId === (gameSession.player1._id || gameSession.player1.id) ? 
+        "You won the battle!" : "Player 1 won the battle!";
+    } else if (scores.player2 > scores.player1) {
+      winnerText = userData.userId === (gameSession.player2._id || gameSession.player2.id) ? 
+        "You won the battle!" : "Player 2 won the battle!";
+    }
 
     return (
       <View style={styles.resultContainer}>
-        <Text style={styles.resultTitle}>
-          {gameStatus === 'completed' ? 'Game Over' : `Round ${gameSession.currentRound} Result`}
-        </Text>
+        <Text style={styles.resultTitle}>Game Over</Text>
         <Text style={styles.resultText}>{message}</Text>
         <Text style={styles.resultExplanation}>{explanation}</Text>
 
@@ -523,17 +536,7 @@ const Battle = () => {
           <Text style={styles.scoreText}>Player 2 Score: {scores.player2}</Text>
         </View>
 
-        {gameStatus === 'completed' && (
-          <Text style={styles.finalWinnerText}>
-            {gameSession.winner
-              ? `Winner: ${gameSession.winner === userData.userId ? 'You' : 'Opponent'}`
-              : 'The game ended in a tie!'}
-          </Text>
-        )}
-
-        {gameStatus !== 'completed' && (
-          <Text style={styles.nextRoundText}>Next round starting soon...</Text>
-        )}
+        <Text style={styles.finalWinnerText}>{winnerText}</Text>
       </View>
     );
   };
@@ -572,6 +575,11 @@ const Battle = () => {
       }, 500);
     });
   }, [leftSwordTranslateX, rightSwordTranslateX]);
+
+  // Function to handle return to index
+  const handleReturnToHome = () => {
+    router.replace('/');
+  };
 
   // Animation styles for swords
   const leftSwordStyle = {
@@ -636,6 +644,18 @@ const Battle = () => {
       
       {!countdown && gameSession?.status === 'active' && (
         roundResult ? renderRoundResult() : renderWordInputArea()
+      )}
+
+      {gameSession?.status === 'completed' && (
+        <View style={styles.completedContainer}>
+          {renderRoundResult()}
+          <TouchableOpacity 
+            style={styles.returnButton}
+            onPress={handleReturnToHome}
+          >
+            <Text style={styles.returnButtonText}>Return to Home</Text>
+          </TouchableOpacity>
+        </View>
       )}
     </View>
   );
@@ -821,13 +841,6 @@ const styles = StyleSheet.create({
     marginTop: 10,
     padding: 10,
   },
-  systemWord: {
-    color: COLORS.white,
-    fontSize: 28,
-    fontWeight: 'bold',
-    marginBottom: 5,
-    textAlign: 'center',
-  },
   roundInfo: {
     color: COLORS.secondary,
     fontSize: 18,
@@ -939,12 +952,6 @@ const styles = StyleSheet.create({
     color: COLORS.primary,
     fontSize: 16,
   },
-  vsText: {
-    color: COLORS.secondary,
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginHorizontal: 10,
-  },
   nextRoundText: {
     color: COLORS.primary,
     fontSize: 18,
@@ -955,5 +962,49 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: 'bold',
     marginTop: 15,
+  },
+  finalWinnerText: {
+    color: COLORS.secondary,
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginTop: 15,
+    textAlign: 'center',
+  },
+  scoresContainer: {
+    marginTop: 15,
+    padding: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 8,
+    width: '100%',
+  },
+  scoreText: {
+    color: COLORS.white,
+    fontSize: 18,
+    marginBottom: 5,
+    textAlign: 'center',
+  },
+  resultExplanation: {
+    color: COLORS.fade,
+    fontSize: 16,
+    textAlign: 'center',
+    marginVertical: 10,
+    paddingHorizontal: 10,
+  },
+  returnButton: {
+    backgroundColor: COLORS.primary,
+    paddingVertical: 15,
+    paddingHorizontal: 30,
+    borderRadius: 8,
+    marginTop: 20,
+    minWidth: 200,
+    alignItems: 'center',
+  },
+  returnButtonText: {
+    color: COLORS.white,
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  completedContainer: {
+    alignItems: 'center',
   },
 });

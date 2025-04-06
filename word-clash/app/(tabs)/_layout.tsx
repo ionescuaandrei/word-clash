@@ -31,14 +31,6 @@ const TabLayout = () => {
                     }} 
                 />
                 <Tabs.Screen 
-                    name="tournament" 
-                    options={{ 
-                        headerShown: false, 
-                        tabBarIcon: ({size, color}: {size: number; color: string}) => <MaterialCommunityIcons name="tournament" size={size} color={color} />,
-                        tabBarLabel: "Tournament", 
-                    }} 
-                />
-                <Tabs.Screen 
                     name="profile" 
                     options={{ 
                         headerShown: false ,
