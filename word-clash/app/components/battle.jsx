@@ -122,7 +122,7 @@ const Battle = () => {
     return null;
   }, [gameSessionId]);
 
-  // Fetch system word for the current round - update to get proper round data
+  // Fetch system word for the current round
   const fetchSystemWord = useCallback(async () => {
     if (!gameSession || gameSession.status !== 'active') {
       console.log("Game session is not active. Skipping system word fetch.");
@@ -130,16 +130,13 @@ const Battle = () => {
     }
 
     try {
-      console.log(`Fetching system word for game session: ${gameSession._id || gameSession.id}, round ${currentRound}`);
+      console.log("Fetching system word for game session:", gameSession._id || gameSession.id);
       const response = await fetch('https://serverpid.onrender.com/generate-words', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ 
-          gameSessionId: gameSession._id || gameSession.id,
-          round: currentRound 
-        }),
+        body: JSON.stringify({ gameSessionId: gameSession._id || gameSession.id }),
       });
 
       if (response.ok) {
@@ -155,16 +152,8 @@ const Battle = () => {
           // Start the word input timer once we have the system word
           startWordInputTimer();
         } else {
-          // If we can't find the round for the current round number, just use the first round
-          const firstRoundData = data.rounds[0];
-          if (firstRoundData) {
-            setSystemWord(firstRoundData.system_word);
-            console.log("Using first available system word:", firstRoundData.system_word);
-            startWordInputTimer();
-          } else {
-            console.error("No system word found for any round");
-            setError('System word not found for the current round.');
-          }
+          console.error("System word not found for round", currentRound);
+          setError('System word not found for the current round.');
         }
       } else {
         const errorText = await response.text();
@@ -175,215 +164,7 @@ const Battle = () => {
       console.error('Error fetching system word:', error);
       setError('Something went wrong while fetching the system word.');
     }
-  }, [gameSession, currentRound, startWordInputTimer]);
-
-  // Define startCountdown at component level
-  const startCountdown = useCallback(() => {
-    let timer = 3; // Start countdown from 3
-    setCountdown(timer);
-
-    const interval = setInterval(() => {
-      timer -= 1;
-      setCountdown(timer);
-
-      if (timer <= 0) {
-        clearInterval(interval);
-        setCountdown(null); // Clear countdown
-        fetchSystemWord(); // Fetch system word after countdown ends
-      }
-    }, 1000);
-  }, [fetchSystemWord]);
-
-  // Poll for round results after submitting
-  const startPollingForRoundResult = useCallback((sessionId) => {
-    console.log("Starting to poll for opponent's submission");
-    let pollCount = 0;
-    const maxPolls = 30; // 30 seconds max waiting time
-    
-    const poll = setInterval(async () => {
-      pollCount++;
-      if (pollCount > maxPolls) {
-        clearInterval(poll);
-        Alert.alert('Timeout', 'The other player did not respond in time.');
-        return;
-      }
-      
-      try {
-        // Poll the game session to check for updates
-        const response = await fetch(`https://serverpid.onrender.com/gamesessions/${sessionId}`, {
-          method: 'GET',
-        });
-        
-        if (response.ok) {
-          const gameData = await response.json();
-          console.log("Poll response for round status:", gameData);
-          
-          // Check if the current round in the session has both player moves
-          const currentRoundData = gameData.rounds?.find(r => r.roundNumber === gameData.currentRound);
-          
-          if (currentRoundData && 
-              currentRoundData.player1Move && 
-              currentRoundData.player2Move) {
-            // Both players have submitted
-            console.log("Both players have now submitted their words");
-            clearInterval(poll);
-            
-            // Fetch the complete round result
-            const evalResponse = await fetch(`https://serverpid.onrender.com/evaluate-round/${sessionId}`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                userId: userData.userId,
-                word: playerWord, // Re-submit the same word to get updated results
-                systemword: systemWord,
-              }),
-            });
-            
-            if (evalResponse.ok) {
-              const resultData = await evalResponse.json();
-              setRoundResult(resultData);
-              
-              if (resultData.gameStatus === 'completed') {
-                console.log("Game completed after polling:", resultData);
-                setGameSession(resultData.gameSession);
-              } else {
-                // Schedule next round
-                setTimeout(() => {
-                  setCurrentRound(resultData.currentRound);
-                  setRoundResult(null);
-                  setSubmittedWord(false);
-                  fetchSystemWord();
-                }, 5000);
-              }
-            }
-          }
-        }
-      } catch (error) {
-        console.error("Error polling for round status:", error);
-      }
-    }, 1000); // Poll every second
-    
-    return () => clearInterval(poll);
-  }, [userData?.userId, playerWord, systemWord, fetchSystemWord]);
-
-  // Submit the player's word
-  const handleWordSubmit = useCallback(async () => {
-    if (submittedWord) return;
-
-    if (!userData || !userData.userId) {
-      Alert.alert('Error', 'User not logged in.');
-      return;
-    }
-
-    if (!gameSession) {
-      Alert.alert('Error', 'Game session not found.');
-      return;
-    }
-
-    const wordToSubmit = playerWord.trim() || '(no submission)';
-    
-    // Call animateSwordClash directly instead of using it as a dependency
-    // This avoids another circular dependency
-    Animated.parallel([
-      Animated.timing(leftSwordTranslateX, {
-        toValue: 0,
-        duration: 300,
-        easing: Easing.easeIn,
-        useNativeDriver: true,
-      }),
-      Animated.timing(rightSwordTranslateX, {
-        toValue: 0,
-        duration: 300,
-        easing: Easing.easeIn,
-        useNativeDriver: true,
-      }),
-    ]).start(() => {
-      setTimeout(() => {
-        Animated.parallel([
-          Animated.timing(leftSwordTranslateX, {
-            toValue: 65,
-            duration: 300,
-            easing: Easing.easeOut,
-            useNativeDriver: true,
-          }),
-          Animated.timing(rightSwordTranslateX, {
-            toValue: -65,
-            duration: 300,
-            easing: Easing.easeOut,
-            useNativeDriver: true,
-          }),
-        ]).start();
-      }, 500);
-    });
-
-    try {
-      setSubmittedWord(true);
-      const sessionId = gameSession._id || gameSession.id;
-
-      console.log(`Submitting word "${wordToSubmit}" for player ${userData.userId} in game ${sessionId}`);
-
-      const response = await fetch(`https://serverpid.onrender.com/evaluate-round/${sessionId}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          userId: userData.userId,
-          word: wordToSubmit,
-          systemword: systemWord,
-        }),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        console.log("Word submission response:", data);
-
-        // Process the round result
-        setRoundResult(data);
-
-        // Check if both players submitted their words
-        if (data.bothPlayersSubmitted) {
-          console.log("Both players have submitted their words");
-          
-          // Check if game completed
-          if (data.gameStatus === 'completed') {
-            console.log("Game completed. Final result:", data);
-            setGameSession(data.gameSession);
-          } else {
-            // If game continues, prepare for the next round
-            console.log("Proceeding to the next round:", data.currentRound);
-            
-            // Schedule next round after showing the result
-            setTimeout(() => {
-              setCurrentRound(data.currentRound);
-              setRoundResult(null);
-              setSubmittedWord(false);
-              fetchSystemWord();
-            }, 5000);
-          }
-        } else {
-          console.log("Waiting for opponent to submit their word");
-          // Start polling for round results
-          startPollingForRoundResult(sessionId);
-        }
-      } else {
-        let errorData;
-        try {
-          errorData = await response.json();
-        } catch (e) {
-          errorData = { message: 'Failed to submit word' };
-        }
-        Alert.alert('Error', errorData.message || 'Failed to submit word.');
-        setSubmittedWord(false);
-      }
-    } catch (error) {
-      console.error('Error submitting word:', error);
-      Alert.alert('Error', 'Something went wrong. Please try again.');
-      setSubmittedWord(false);
-    }
-  }, [playerWord, gameSession, userData, systemWord, submittedWord, leftSwordTranslateX, rightSwordTranslateX]);
+  }, [gameSession, currentRound]);
 
   // Start the timer for word submission
   const startWordInputTimer = useCallback(() => {
@@ -410,7 +191,139 @@ const Battle = () => {
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [playerWord, submittedWord, handleWordSubmit]);
+  }, [playerWord, submittedWord]);
+
+  // Submit the player's word
+  const handleWordSubmit = useCallback(async () => {
+    if (submittedWord) return;
+
+    if (!userData || !userData.userId) {
+      Alert.alert('Error', 'User not logged in.');
+      return;
+    }
+
+    if (!gameSession) {
+      Alert.alert('Error', 'Game session not found.');
+      return;
+    }
+
+    const wordToSubmit = playerWord.trim() || '(no submission)';
+
+    try {
+      setSubmittedWord(true);
+      const sessionId = gameSession._id || gameSession.id;
+
+      console.log(`Submitting word "${wordToSubmit}" for player ${userData.userId} in game ${sessionId}`);
+
+      const response = await fetch(`https://serverpid.onrender.com/evaluate-round/${sessionId}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userId: userData.userId,
+          word: wordToSubmit,
+          systemword: systemWord,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log("Word submission response:", data);
+
+        setRoundResult(data);
+
+        if (data.bothPlayersSubmitted) {
+          console.log("Both players have submitted their words.");
+          if (data.gameStatus === 'completed') {
+            console.log("Game completed. Final result:", data);
+            setGameSession(data.gameSession); // Update the game session with final data
+          } else {
+            // Fetch the next system word for the new round
+            console.log("Proceeding to the next round...");
+            setTimeout(() => {
+              setRoundResult(null);
+              fetchSystemWord();
+            }, 5000);
+          }
+        } else {
+          console.log("Waiting for the opponent's response...");
+          startPollingForRoundResult(sessionId);
+        }
+      } else {
+        const errorData = await response.json();
+        Alert.alert('Error', errorData.message || 'Failed to submit word.');
+        setSubmittedWord(false);
+      }
+    } catch (error) {
+      console.error('Error submitting word:', error);
+      Alert.alert('Error', 'Something went wrong. Please try again.');
+      setSubmittedWord(false);
+    }
+  }, [playerWord, gameSession, userData, systemWord, submittedWord]);
+
+  // Poll for round results after submitting
+  const startPollingForRoundResult = useCallback((sessionId) => {
+    let pollCount = 0;
+    const maxPolls = 30; // 30 seconds max waiting time
+    
+    const poll = setInterval(async () => {
+      pollCount++;
+      if (pollCount > maxPolls) {
+        clearInterval(poll);
+        Alert.alert('Timeout', 'The other player did not respond in time.');
+        return;
+      }
+      
+      try {
+        const response = await fetch(`https://serverpid.onrender.com/round-status/${sessionId}`, {
+          method: 'GET',
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          console.log("Round status poll response:", data);
+          
+          if (data.bothPlayersSubmitted) {
+            clearInterval(poll);
+            setRoundResult(data);
+            
+            if (data.gameStatus === 'completed') {
+              console.log("Game completed. Final result:", data);
+              setGameSession(data.gameSession); // Update the game session with final data
+            } else {
+              console.log("Proceeding to the next round...");
+              setTimeout(() => {
+                setRoundResult(null);
+                fetchSystemWord();
+              }, 5000);
+            }
+          }
+        }
+      } catch (error) {
+        console.error("Error polling for round status:", error);
+      }
+    }, 1000); // Poll every second
+    
+    return () => clearInterval(poll);
+  }, [fetchSystemWord]);
+
+  // Define startCountdown at component level
+  const startCountdown = useCallback(() => {
+    let timer = 3; // Start countdown from 3
+    setCountdown(timer);
+
+    const interval = setInterval(() => {
+      timer -= 1;
+      setCountdown(timer);
+
+      if (timer <= 0) {
+        clearInterval(interval);
+        setCountdown(null); // Clear countdown
+        fetchSystemWord(); // Fetch system word after countdown ends
+      }
+    }, 1000);
+  }, [fetchSystemWord]);
 
   // Initial game session fetch
   useEffect(() => {
@@ -592,58 +505,73 @@ const Battle = () => {
     );
   };
 
-  // Render the round result with clearer information
   const renderRoundResult = () => {
     if (!roundResult) return null;
 
-    // Extract data safely with defaults
-    const message = roundResult.message || "Round completed!";
-    const explanation = roundResult.explanation || "The battle of words has concluded.";
-    const result = roundResult.roundResult || "unknown";
-    const scores = roundResult.scores || { player1: 0, player2: 0 };
-    const gameStatus = roundResult.gameStatus || "active";
-    const currentRoundNum = roundResult.currentRound || currentRound;
-    const systemWordText = roundResult.systemWord || systemWord;
+    const { message, explanation, roundResult: result, scores, gameStatus, gameSession } = roundResult;
 
     return (
       <View style={styles.resultContainer}>
         <Text style={styles.resultTitle}>
-          {gameStatus === 'completed' ? 'Game Over' : `Round ${currentRoundNum - 1} Result`}
+          {gameStatus === 'completed' ? 'Game Over' : `Round ${gameSession.currentRound} Result`}
         </Text>
         <Text style={styles.resultText}>{message}</Text>
         <Text style={styles.resultExplanation}>{explanation}</Text>
 
         <View style={styles.scoresContainer}>
-          <Text style={styles.scoreText}>Scores: {scores.player1} - {scores.player2}</Text>
+          <Text style={styles.scoreText}>Player 1 Score: {scores.player1}</Text>
+          <Text style={styles.scoreText}>Player 2 Score: {scores.player2}</Text>
         </View>
 
-        <View style={styles.wordResultContainer}>
-          <Text style={styles.systemWordResult}>System Word: {systemWordText}</Text>
-          <Text style={styles.playerWordResult}>Your Word: {playerWord}</Text>
-          <Text style={[
-            styles.battleResult, 
-            result === 'win' ? styles.winResult : 
-            result === 'lose' ? styles.loseResult : styles.tieResult
-          ]}>
-            {result === 'win' ? 'Victory!' : 
-             result === 'lose' ? 'Defeat!' : 'Draw!'}
-          </Text>
-        </View>
-
-        {gameStatus === 'completed' ? (
+        {gameStatus === 'completed' && (
           <Text style={styles.finalWinnerText}>
-            {roundResult.gameSession?.winner
-              ? (roundResult.gameSession.winner === userData.userId 
-                 ? 'You won the battle!' 
-                 : 'Your opponent won the battle!')
-              : 'The battle ended in a tie!'}
+            {gameSession.winner
+              ? `Winner: ${gameSession.winner === userData.userId ? 'You' : 'Opponent'}`
+              : 'The game ended in a tie!'}
           </Text>
-        ) : (
+        )}
+
+        {gameStatus !== 'completed' && (
           <Text style={styles.nextRoundText}>Next round starting soon...</Text>
         )}
       </View>
     );
   };
+
+  const animateSwordClash = useCallback(() => {
+    // Animate swords to clash when word is submitted
+    Animated.parallel([
+      Animated.timing(leftSwordTranslateX, {
+        toValue: 0,
+        duration: 300,
+        easing: Easing.easeIn,
+        useNativeDriver: true,
+      }),
+      Animated.timing(rightSwordTranslateX, {
+        toValue: 0,
+        duration: 300,
+        easing: Easing.easeIn,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      setTimeout(() => {
+        Animated.parallel([
+          Animated.timing(leftSwordTranslateX, {
+            toValue: 65,
+            duration: 300,
+            easing: Easing.easeOut,
+            useNativeDriver: true,
+          }),
+          Animated.timing(rightSwordTranslateX, {
+            toValue: -65,
+            duration: 300,
+            easing: Easing.easeOut,
+            useNativeDriver: true,
+          }),
+        ]).start();
+      }, 500);
+    });
+  }, [leftSwordTranslateX, rightSwordTranslateX]);
 
   // Animation styles for swords
   const leftSwordStyle = {
@@ -977,71 +905,55 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 15,
   },
-  resultExplanation: {
-    color: COLORS.white,
-    fontSize: 16,
-    textAlign: 'center',
-    marginBottom: 15,
-    fontStyle: 'italic',
-  },
-  scoresContainer: {
+  wordsComparisonContainer: {
     flexDirection: 'row',
-    justifyContent: 'center',
-    marginVertical: 10,
-    padding: 8,
-    backgroundColor: 'rgba(0, 0, 0, 0.2)',
-    borderRadius: 5,
-    minWidth: 150,
-  },
-  scoreText: {
-    color: COLORS.white,
-    fontSize: 18,
-    fontWeight: 'bold',
-    textAlign: 'center',
-  },
-  wordResultContainer: {
+    alignItems: 'center',
+    justifyContent: 'space-between',
     width: '100%',
+    marginVertical: 15,
+  },
+  playerWordContainer: {
+    flex: 1,
     padding: 10,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.primary,
-    marginTop: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 8,
     alignItems: 'center',
   },
-  systemWordResult: {
-    color: COLORS.white,
-    fontSize: 16,
+  winnerContainer: {
+    backgroundColor: 'rgba(52, 152, 219, 0.15)',
+    borderWidth: 2,
+    borderColor: COLORS.secondary,
+  },
+  playerLabel: {
+    color: COLORS.fade,
+    fontSize: 14,
     marginBottom: 5,
   },
-  playerWordResult: {
-    color: COLORS.primary,
+  playerWordText: {
+    color: COLORS.white,
     fontSize: 18,
     fontWeight: 'bold',
-    marginBottom: 10,
+    marginVertical: 5,
   },
-  battleResult: {
-    fontSize: 24,
+  wordScore: {
+    color: COLORS.primary,
+    fontSize: 16,
+  },
+  vsText: {
+    color: COLORS.secondary,
+    fontSize: 16,
     fontWeight: 'bold',
-    marginVertical: 10,
-  },
-  winResult: {
-    color: '#4CAF50', // Green
-  },
-  loseResult: {
-    color: '#F44336', // Red
-  },
-  tieResult: {
-    color: '#FFC107', // Amber
+    marginHorizontal: 10,
   },
   nextRoundText: {
     color: COLORS.primary,
     fontSize: 18,
     marginTop: 15,
   },
-  finalWinnerText: {
+  gameOverText: {
     color: COLORS.secondary,
     fontSize: 22,
     fontWeight: 'bold',
     marginTop: 15,
-    textAlign: 'center',
   },
 });
